@@ -34,7 +34,7 @@ def get_trend(series):
 #returns consumption value given history, difference value, 
 #and interval
 def untrend(history, diff, interval=1):
-    val = history.iloc[-interval-1]
+    val = history.iloc[-interval]
     return diff + val[1]
 
 def split_data(series):
@@ -88,17 +88,17 @@ supervised_vals = series_to_sv(trend_data)
 train, test = split_data(supervised_vals)
 scaler, scaled_train, scaled_test = scale_series(train, test)
 
-lstm_model=fit_lstm(scaled_train, 1, 200, 3)
+lstm_model=fit_lstm(scaled_train, 1, 500, 10)
 train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
 lstm_model.predict(train_reshaped, batch_size=1)
 
 predictions = list()
 for i in range(len(scaled_test)):
     X, y = scaled_test.iloc[i, 0:-1], scaled_test.iloc[i, -1]
-#    forecast = forecast_lstm(lstm_model, 1, X)
+    #forecast = forecast_lstm(lstm_model, 1, X)
     forecast = y
     forecast = unscale(scaler, X, forecast)
-    forecast = untrend(raw_vals, forecast, len(scaled_test)+1-i)
+    forecast = untrend(raw_vals, forecast, len(scaled_test) + 1 - i)
     predictions.append(forecast)
     expected = raw_vals.iloc[len(train) + i + 1][1]
     print("Month=%d, Predicted=%f, Expected=%f" % (i+1, forecast,
@@ -106,7 +106,7 @@ for i in range(len(scaled_test)):
 
 
 rmse = sqrt(mean_squared_error(raw_vals.iloc[-len(test):][1], predictions))
+t = range(0, len(test))
 print('Test RMSE: %.3f' % rmse)
-plt.plot(raw_vals.iloc[-len(test):][1])
-plt.plot(predictions)
+plt.plot(t, raw_vals.iloc[-len(test):][1], t, predictions)
 plt.show()
