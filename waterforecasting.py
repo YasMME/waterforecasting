@@ -9,12 +9,6 @@ from keras.models import Sequential
 from keras import metrics
 from math import sqrt
 
-data = data_in()
-borough1 = data['BRONX']
-
-X = borough1.values
-raw_vals = pd.DataFrame(X)
-
 
 ### Attribution: Adapted from
 ###https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
@@ -59,27 +53,27 @@ def unscale(scaler, X, value):
     inverse = scaler.inverse_transform(array)
     return inverse[0, -1]
 
-def fit_lstm(train, batch_size, num_epochs, neurons):
+def fit_lstm(train, batch_size, num_epochs, neurons, run):
     x, y = np.array(train.iloc[:,0:1]), np.array(train.iloc[:,1:2])
     x = x.reshape(x.shape[0], 1, x.shape[1])
-    for i in range(5):
-        model = Sequential()
-        model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1],
-            x.shape[2]), return_sequences=True, stateful=True))
-        model.add(LSTM(neurons, return_sequences=True, stateful=True))
-        model.add(LSTM(neurons))
-        model.add(Dense(1))
-        model.compile(loss='mean_squared_error', optimizer='adam')
-        history = model.fit(x, y, epochs=num_epochs, validation_split =
-            0.33, batch_size=batch_size, verbose=2, shuffle=False)
-        r = range(0, num_epochs)
-        plt.plot(r, history.history['loss'], 'r', label="loss")
-        plt.plot(r, history.history['val_loss'], 'c', label="val_loss")
-        plt.legend(loc="upper right")
-        plt.xlabel("epochs")
-        plt.savefig(str(i)+"_"+str(num_epochs)+"loss.png")
-        plt.clf()
-        model.reset_states()
+    #for i in range(5):
+    model = Sequential()
+    model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1], x.shape[2]), return_sequences=True, stateful=True))
+    model.add(LSTM(neurons, return_sequences=True, stateful=True))
+    model.add(LSTM(neurons))
+    model.add(Dense(1))
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    history = model.fit(x, y, epochs=num_epochs, validation_split =
+        0.33, batch_size=batch_size, verbose=2, shuffle=False)
+    r = range(0, num_epochs)
+    plt.plot(r, history.history['loss'], 'r', label="loss")
+    plt.plot(r, history.history['val_loss'], 'c', label="val_loss")
+    plt.legend(loc="upper right")
+    plt.xlabel("epochs")
+    plt.title(BOROUGH)
+    plt.savefig(BOROUGH + "_" + str(run) + "_loss.png")
+    plt.clf()
+    model.reset_states()
     return model, history
 
 def forecast_lstm(model, batch_size, X):
@@ -87,29 +81,52 @@ def forecast_lstm(model, batch_size, X):
     forecast = model.predict(X, batch_size=batch_size)
     return forecast[0,0]
 
-supervised_vals = series_to_sv(raw_vals)
-train, test = split_data(supervised_vals)
-scaler, scaled_train, scaled_test = scale_series(train, test)
+data = data_in()
+for a in range(5):
+    for BOROUGH in data:
+        f = open(BOROUGH + "_" + str(a) + ".txt", "w+")
+        X = data[BOROUGH].values
+        plt.plot(X[:, 0], X[:,1])
+        plt.xlabel("Date")
+        plt.ylabel("Consumption (HCF)")
+        plt.title(BOROUGH)
+        plt.savefig(BOROUGH + "_" + str(a) + "_data.png")
+        plt.clf()
+        raw_vals = pd.DataFrame(X)
 
-lstm_model, history = fit_lstm(scaled_train, 1, 125, 32)
-#train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
-#lstm_model.predict(train_reshaped, batch_size=1)
+        supervised_vals = series_to_sv(raw_vals)
+        train, test = split_data(supervised_vals)
+        scaler, scaled_train, scaled_test = scale_series(train, test)
 
-predictions = list()
-expected = list()
-for i in range(len(scaled_test)):
-    X, y = scaled_test.iloc[i, 0:-1], scaled_test.iloc[i, -1]
-    forecast = forecast_lstm(lstm_model, 1, X)
-    forecast = unscale(scaler, X, forecast)
-    predictions.append(forecast)
-    expect = raw_vals.iloc[len(train) + i + 1][1]
-    expected.append(expect)
-    print("Month=%d, Predicted=%f, Expected=%f" % (i+1, forecast,
-        expect))
+        lstm_model, history = fit_lstm(scaled_train, 1, 125, 32, a)
 
-rmse = sqrt(mean_squared_error(expected, predictions))
-#t = range(0, len(test))
-print('Test RMSE: %.3f' % rmse)
-#plt.plot(t, expected, t, predictions)
-#plt.show()
+        train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
+        lstm_model.predict(train_reshaped, batch_size=1)
 
+        predictions = list()
+        expected = list()
+        for i in range(len(scaled_test)):
+            X, y = scaled_test.iloc[i, 0:-1], scaled_test.iloc[i, -1]
+            forecast = forecast_lstm(lstm_model, 1, X)
+            forecast = unscale(scaler, X, forecast)
+            predictions.append(forecast)
+            expect = raw_vals.iloc[len(train) + i + 1][1]
+            expected.append(expect)
+            f.write("Month=%d, Predicted=%f, Expected=%f\n" % (i+1,
+                forecast, expect))
+            print("Month=%d, Predicted=%f, Expected=%f" % (i+1, forecast,
+                expect))
+
+        rmse = sqrt(mean_squared_error(expected, predictions))
+        f.write('Test RMSE: %.3f' % rmse)
+        print('Test RMSE: %.3f' % rmse)
+        f.close()
+
+        t = range(len(scaled_test))
+        plt.plot(t, expected, 'green', label="Expected")
+        plt.plot(t, predictions, 'red', label="Predictions")
+        plt.ylabel("Consumption (HCF)")
+        plt.legend(loc="upper right")
+        plt.title(BOROUGH)
+        plt.savefig(BOROUGH + "_" + str(a) + "_Consumption(HCF).png")
+        plt.clf()
