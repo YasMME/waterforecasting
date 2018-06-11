@@ -6,6 +6,7 @@ from sklearn.preprocessing import MinMaxScaler
 from sklearn.metrics import mean_squared_error
 from keras.layers import LSTM, Dense
 from keras.models import Sequential
+from keras import metrics
 from math import sqrt
 
 data = data_in()
@@ -26,17 +27,6 @@ def series_to_sv(series, lag=1):
     df.fillna(0, inplace=True)
     return df
 
-def get_trend(series):
-    trend = series.diff()
-    trend = trend.fillna(0)[1]
-    return trend 
-
-#returns consumption value given history, difference value, 
-#and interval
-def untrend(history, diff, interval=1):
-    val = history.iloc[-interval]
-    return diff + val[1]
-
 def split_data(series):
     l = len(series)
     split = (2*l)/3
@@ -45,14 +35,15 @@ def split_data(series):
     return train, test 
 
 def scale_series(train, test):
-    x = train.values
-    x = np.array(x)
-    x = x.reshape(len(x), 2)
+    x = train.values[:, [1,3]]
+    x = pd.DataFrame(x)
     scaler = MinMaxScaler(feature_range=(-1,1))
     scaler = scaler.fit(x)
     scaled_train = scaler.transform(x)
     scaled_train = pd.DataFrame(scaled_train)
-    scaled_test = scaler.transform(test.values)
+    y = test.values[:, [1,3]]
+    y = pd.DataFrame(y)
+    scaled_test = scaler.transform(y)
     scaled_test = pd.DataFrame(scaled_test)
     return scaler, scaled_train, scaled_test
 
@@ -71,42 +62,43 @@ def fit_lstm(train, batch_size, num_epochs, neurons):
     model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1],
         x.shape[2]), stateful=True))
     model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='sgd')
-    for i in range(num_epochs):
-        model.fit(x, y, epochs=1, batch_size=batch_size, verbose=0,
-                shuffle=False)
-        model.reset_states()
-    return model
+    model.compile(loss='mean_squared_error', optimizer='adam')
+    #for i in range(num_epochs):
+    history = model.fit(x, y, epochs=100, batch_size=batch_size, verbose=2, shuffle=False)
+    model.reset_states()
+    return model, history
 
 def forecast_lstm(model, batch_size, X):
     X = X.reshape(1, 1, len(X))
     forecast = model.predict(X, batch_size=batch_size)
     return forecast[0,0]
 
-trend_data = get_trend(raw_vals)
-supervised_vals = series_to_sv(trend_data)
+supervised_vals = series_to_sv(raw_vals)
 train, test = split_data(supervised_vals)
 scaler, scaled_train, scaled_test = scale_series(train, test)
 
-lstm_model=fit_lstm(scaled_train, 1, 500, 10)
+lstm_model, history =fit_lstm(scaled_train, 1, 500, 10)
 train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
 lstm_model.predict(train_reshaped, batch_size=1)
 
 predictions = list()
+expected = list()
 for i in range(len(scaled_test)):
     X, y = scaled_test.iloc[i, 0:-1], scaled_test.iloc[i, -1]
-    #forecast = forecast_lstm(lstm_model, 1, X)
-    forecast = y
+    forecast = forecast_lstm(lstm_model, 1, X)
     forecast = unscale(scaler, X, forecast)
-    forecast = untrend(raw_vals, forecast, len(scaled_test) + 1 - i)
     predictions.append(forecast)
-    expected = raw_vals.iloc[len(train) + i + 1][1]
+    expect = raw_vals.iloc[len(train) + i + 1][1]
+    expected.append(expect)
     print("Month=%d, Predicted=%f, Expected=%f" % (i+1, forecast,
-        expected))
+        expect))
 
 
-rmse = sqrt(mean_squared_error(raw_vals.iloc[-len(test):][1], predictions))
+rmse = sqrt(mean_squared_error(expected, predictions))
 t = range(0, len(test))
 print('Test RMSE: %.3f' % rmse)
-plt.plot(t, raw_vals.iloc[-len(test):][1], t, predictions)
+plt.plot(t, expected, t, predictions)
+plt.show()
+
+plt.plot(history.history['loss'])
 plt.show()
