@@ -86,12 +86,13 @@ for a in range(5):
     for BOROUGH in data:
         f = open(BOROUGH + "_" + str(a) + ".txt", "w+")
         X = data[BOROUGH].values
-        plt.plot(X[:, 0], X[:,1])
-        plt.xlabel("Date")
-        plt.ylabel("Consumption (HCF)")
-        plt.title(BOROUGH)
-        plt.savefig(BOROUGH + "_" + str(a) + "_data.png")
-        plt.clf()
+        if a == 0:
+            plt.plot(X[:, 0], X[:,1])
+            plt.xlabel("Date")
+            plt.ylabel("Consumption (HCF)")
+            plt.title(BOROUGH)
+            plt.savefig(BOROUGH + "_data.png")
+            plt.clf()
         raw_vals = pd.DataFrame(X)
 
         supervised_vals = series_to_sv(raw_vals)
