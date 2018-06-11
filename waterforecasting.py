@@ -12,12 +12,12 @@ from math import sqrt
 data = data_in()
 borough1 = data['BRONX']
 
-### Attribution:
-###https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
-
 X = borough1.values
 raw_vals = pd.DataFrame(X)
 
+
+### Attribution: Adapted from
+###https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
 #create supervised learning problem
 def series_to_sv(series, lag=1):
     df = pd.DataFrame(series)
@@ -34,6 +34,8 @@ def split_data(series):
     test = series[split+1:l]
     return train, test 
 
+### Attribution: Adapted from
+###https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
 def scale_series(train, test):
     x = train.values[:, [1,3]]
     x = pd.DataFrame(x)
@@ -47,6 +49,9 @@ def scale_series(train, test):
     scaled_test = pd.DataFrame(scaled_test)
     return scaler, scaled_train, scaled_test
 
+
+### Attribution: Adapted from
+###https://machinelearningmastery.com/time-series-forecasting-long-short-term-memory-network-python/
 def unscale(scaler, X, value): 
     new_row = [x for x in X] + [value]
     array = np.array(new_row)
@@ -54,24 +59,31 @@ def unscale(scaler, X, value):
     inverse = scaler.inverse_transform(array)
     return inverse[0, -1]
 
-### Attr. Machine Learning Mastery
 def fit_lstm(train, batch_size, num_epochs, neurons):
     x, y = np.array(train.iloc[:,0:1]), np.array(train.iloc[:,1:2])
     x = x.reshape(x.shape[0], 1, x.shape[1])
-    model = Sequential()
-    model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1],
-        x.shape[2]), return_sequences=True, stateful=True))
-    model.add(LSTM(neurons, return_sequences=True, stateful=True))
-    model.add(LSTM(neurons))
-    model.add(Dense(1))
-    model.compile(loss='mean_squared_error', optimizer='adam')
-    history = model.fit(x, y, epochs=num_epochs, validation_split =
+    for i in range(5):
+        model = Sequential()
+        model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1],
+            x.shape[2]), return_sequences=True, stateful=True))
+        model.add(LSTM(neurons, return_sequences=True, stateful=True))
+        model.add(LSTM(neurons))
+        model.add(Dense(1))
+        model.compile(loss='mean_squared_error', optimizer='adam')
+        history = model.fit(x, y, epochs=num_epochs, validation_split =
             0.33, batch_size=batch_size, verbose=2, shuffle=False)
-    model.reset_states()
+        r = range(0, num_epochs)
+        plt.plot(r, history.history['loss'], 'r', label="loss")
+        plt.plot(r, history.history['val_loss'], 'c', label="val_loss")
+        plt.legend(loc="upper right")
+        plt.xlabel("epochs")
+        plt.savefig(str(i)+"_"+str(num_epochs)+"loss.png")
+        plt.clf()
+        model.reset_states()
     return model, history
 
 def forecast_lstm(model, batch_size, X):
-    X = X.reshape(1, 1, len(X))
+    X = np.reshape(X, (1, 1, len(X)))
     forecast = model.predict(X, batch_size=batch_size)
     return forecast[0,0]
 
@@ -79,9 +91,9 @@ supervised_vals = series_to_sv(raw_vals)
 train, test = split_data(supervised_vals)
 scaler, scaled_train, scaled_test = scale_series(train, test)
 
-lstm_model, history = fit_lstm(scaled_train, 1, 250, 32)
-train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
-lstm_model.predict(train_reshaped, batch_size=1)
+lstm_model, history = fit_lstm(scaled_train, 1, 125, 32)
+#train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
+#lstm_model.predict(train_reshaped, batch_size=1)
 
 predictions = list()
 expected = list()
@@ -96,14 +108,8 @@ for i in range(len(scaled_test)):
         expect))
 
 rmse = sqrt(mean_squared_error(expected, predictions))
-t = range(0, len(test))
+#t = range(0, len(test))
 print('Test RMSE: %.3f' % rmse)
-plt.plot(t, expected, t, predictions)
-plt.show()
+#plt.plot(t, expected, t, predictions)
+#plt.show()
 
-r = range(0, 250)
-plt.plot(r, history.history['loss'], label="loss")
-plt.plot(r, history.history['val_loss'], label="val_loss")
-plt.legend(loc="upper right")
-plt.xlabel("epochs")
-plt.show()
