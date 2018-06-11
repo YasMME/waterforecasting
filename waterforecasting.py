@@ -60,11 +60,13 @@ def fit_lstm(train, batch_size, num_epochs, neurons):
     x = x.reshape(x.shape[0], 1, x.shape[1])
     model = Sequential()
     model.add(LSTM(neurons, batch_input_shape=(batch_size, x.shape[1],
-        x.shape[2]), stateful=True))
+        x.shape[2]), return_sequences=True, stateful=True))
+    model.add(LSTM(neurons, return_sequences=True, stateful=True))
+    model.add(LSTM(neurons))
     model.add(Dense(1))
     model.compile(loss='mean_squared_error', optimizer='adam')
-    #for i in range(num_epochs):
-    history = model.fit(x, y, epochs=100, batch_size=batch_size, verbose=2, shuffle=False)
+    history = model.fit(x, y, epochs=num_epochs, validation_split =
+            0.33, batch_size=batch_size, verbose=2, shuffle=False)
     model.reset_states()
     return model, history
 
@@ -77,7 +79,7 @@ supervised_vals = series_to_sv(raw_vals)
 train, test = split_data(supervised_vals)
 scaler, scaled_train, scaled_test = scale_series(train, test)
 
-lstm_model, history =fit_lstm(scaled_train, 1, 500, 10)
+lstm_model, history = fit_lstm(scaled_train, 1, 250, 32)
 train_reshaped = np.array(scaled_train.iloc[:,0]).reshape(len(scaled_train), 1, 1)
 lstm_model.predict(train_reshaped, batch_size=1)
 
@@ -93,12 +95,15 @@ for i in range(len(scaled_test)):
     print("Month=%d, Predicted=%f, Expected=%f" % (i+1, forecast,
         expect))
 
-
 rmse = sqrt(mean_squared_error(expected, predictions))
 t = range(0, len(test))
 print('Test RMSE: %.3f' % rmse)
 plt.plot(t, expected, t, predictions)
 plt.show()
 
-plt.plot(history.history['loss'])
+r = range(0, 250)
+plt.plot(r, history.history['loss'], label="loss")
+plt.plot(r, history.history['val_loss'], label="val_loss")
+plt.legend(loc="upper right")
+plt.xlabel("epochs")
 plt.show()
